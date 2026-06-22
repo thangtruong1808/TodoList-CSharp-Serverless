@@ -27,6 +27,8 @@ public interface INotificationService
     Task<NotificationListResponse> GetNotificationsAsync(int limit, int offset, CancellationToken cancellationToken = default);
     Task<NotificationItem?> MarkReadAsync(long id, CancellationToken cancellationToken = default);
     Task<bool> MarkAllReadAsync(CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAllAsync(CancellationToken cancellationToken = default);
 }
 
 public interface IDashboardService

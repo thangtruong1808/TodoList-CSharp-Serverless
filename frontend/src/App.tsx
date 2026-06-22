@@ -2,9 +2,11 @@ import { type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import TodoList from './components/TodoList'
 import AdminRoute from './components/layout/AdminRoute'
+import PmAdminRoute from './components/layout/PmAdminRoute'
 import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import DashboardPage from './pages/DashboardPage'
+import ProjectsPage from './pages/ProjectsPage'
 import UsersPage from './pages/UsersPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LoginPage from './pages/LoginPage'
@@ -61,6 +63,9 @@ function App() {
           <Route element={<AppLayout />}>
             <Route index element={<TodoList />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route element={<PmAdminRoute />}>
+              <Route path="projects" element={<ProjectsPage />} />
+            </Route>
             <Route element={<AdminRoute />}>
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="users" element={<UsersPage />} />

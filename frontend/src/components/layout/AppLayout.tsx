@@ -6,6 +6,7 @@ import { useSignalR } from '../../hooks/useSignalR'
 import {
   ChartIcon,
   ClipboardIcon,
+  FolderIcon,
   LogoutIcon,
   ProfileIcon,
   UsersIcon,
@@ -60,6 +61,12 @@ export default function AppLayout() {
               <ClipboardIcon size={16} />
               Tasks
             </NavLink>
+            {(user?.role === 'Admin' || user?.role === 'ProjectManager') && (
+              <NavLink to="/projects" className={linkClass}>
+                <FolderIcon size={16} />
+                Projects
+              </NavLink>
+            )}
             {user?.role === 'Admin' && (
               <NavLink to="/dashboard" className={linkClass}>
                 <ChartIcon size={16} />

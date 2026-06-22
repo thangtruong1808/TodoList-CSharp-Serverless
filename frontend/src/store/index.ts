@@ -83,6 +83,7 @@ export interface NotificationState {
   unreadCount: number
   loading: boolean
   tasksRefreshToken: number
+  projectsRefreshToken: number
 }
 
 const notificationSlice = createSlice({
@@ -92,6 +93,7 @@ const notificationSlice = createSlice({
     unreadCount: 0,
     loading: false,
     tasksRefreshToken: 0,
+    projectsRefreshToken: 0,
   } as NotificationState,
   reducers: {
     setLoading(state, action: PayloadAction<boolean>) {
@@ -111,6 +113,7 @@ const notificationSlice = createSlice({
         title: string
         message: string
         taskId: number | null
+        type?: string
         projectName?: string | null
         projectCode?: string | null
         createdAt: string
@@ -131,7 +134,16 @@ const notificationSlice = createSlice({
         ...state.items,
       ].slice(0, 20)
       state.unreadCount += 1
-      state.tasksRefreshToken += 1
+      const notificationType = action.payload.type ?? 'TaskAssigned'
+      if (notificationType === 'ProjectAssigned') {
+        state.projectsRefreshToken += 1
+      } else if (
+        notificationType === 'TaskAssigned' ||
+        notificationType === 'TaskStatusUpdated' ||
+        action.payload.taskId != null
+      ) {
+        state.tasksRefreshToken += 1
+      }
     },
     markRead(state, action: PayloadAction<{ id: number; readAt: string | null }>) {
       const item = state.items.find((n) => n.id === action.payload.id)
@@ -154,10 +166,28 @@ const notificationSlice = createSlice({
       })
       state.unreadCount = 0
     },
+    removeNotification(state, action: PayloadAction<number>) {
+      const item = state.items.find((n) => n.id === action.payload)
+      if (item && !item.isRead) {
+        state.unreadCount = Math.max(0, state.unreadCount - 1)
+      }
+      state.items = state.items.filter((n) => n.id !== action.payload)
+    },
+    removeAllNotifications(state) {
+      state.items = []
+      state.unreadCount = 0
+    },
+    bumpTasksRefresh(state) {
+      state.tasksRefreshToken += 1
+    },
+    bumpProjectsRefresh(state) {
+      state.projectsRefreshToken += 1
+    },
     clearNotifications(state) {
       state.items = []
       state.unreadCount = 0
       state.tasksRefreshToken = 0
+      state.projectsRefreshToken = 0
     },
   },
 })
@@ -168,6 +198,10 @@ export const {
   addNotification,
   markRead,
   markAllRead,
+  removeNotification,
+  removeAllNotifications,
+  bumpTasksRefresh,
+  bumpProjectsRefresh,
   clearNotifications,
 } = notificationSlice.actions
 

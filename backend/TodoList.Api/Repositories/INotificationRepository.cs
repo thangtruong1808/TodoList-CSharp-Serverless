@@ -9,5 +9,7 @@ public interface INotificationRepository
     Task<int> CountUnreadAsync(long userId, CancellationToken cancellationToken = default);
     Task<bool> MarkReadAsync(long id, long userId, CancellationToken cancellationToken = default);
     Task<bool> MarkAllReadAsync(long userId, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(long id, long userId, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAllAsync(long userId, CancellationToken cancellationToken = default);
     Task<NotificationItem?> GetByIdForUserAsync(long id, long userId, CancellationToken cancellationToken = default);
 }

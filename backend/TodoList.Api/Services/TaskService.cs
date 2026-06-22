@@ -69,9 +69,9 @@ public class TaskService : ITaskService
 
     public async Task<TaskItem> CreateAsync(CreateTaskRequest request, CancellationToken cancellationToken = default)
     {
-        if (!_currentUser.IsAdmin)
+        if (!_currentUser.IsAdmin && !_currentUser.IsProjectManager)
         {
-            throw new UnauthorizedAccessException("Only admins can create tasks.");
+            throw new UnauthorizedAccessException("Only admins and project managers can create tasks.");
         }
 
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -82,6 +82,18 @@ public class TaskService : ITaskService
         if (request.ProjectId <= 0)
         {
             throw new ArgumentException("Project is required.", nameof(request));
+        }
+
+        if (_currentUser.IsProjectManager && _currentUser.UserId.HasValue)
+        {
+            var isMember = await _projectRepository.IsMemberAsync(
+                request.ProjectId,
+                _currentUser.UserId.Value,
+                cancellationToken);
+            if (!isMember)
+            {
+                throw new UnauthorizedAccessException("You are not assigned to this project.");
+            }
         }
 
         var now = DateTime.UtcNow;
@@ -100,6 +112,11 @@ public class TaskService : ITaskService
 
     public async Task<bool> UpdateAsync(long id, UpdateTaskRequest request, CancellationToken cancellationToken = default)
     {
+        if (_currentUser.Role == UserRole.User)
+        {
+            throw new UnauthorizedAccessException("Users cannot edit task name or description.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             throw new ArgumentException("Task name is required.", nameof(request));
@@ -204,13 +221,13 @@ public class TaskService : ITaskService
 
     public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
     {
-        if (!_currentUser.IsAdmin)
+        if (!_currentUser.IsAdmin && !_currentUser.IsProjectManager)
         {
-            throw new UnauthorizedAccessException("Only admins can delete tasks.");
+            throw new UnauthorizedAccessException("Only admins and project managers can delete tasks.");
         }
 
         var existing = await _taskRepository.GetByIdAsync(id, cancellationToken);
-        if (existing is null)
+        if (existing is null || !await CanAccessTaskAsync(existing, cancellationToken))
         {
             return false;
         }

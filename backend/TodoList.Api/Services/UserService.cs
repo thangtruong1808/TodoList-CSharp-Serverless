@@ -59,10 +59,22 @@ public class UserService : IUserService
 
     public async Task<IReadOnlyList<UserDto>> GetAssignableUsersAsync(CancellationToken cancellationToken = default)
     {
-        if (!_currentUser.IsAdmin) return [];
+        if (!_currentUser.IsAdmin && !_currentUser.IsProjectManager)
+        {
+            return [];
+        }
+
         var users = await _userRepository.GetAllActiveAsync(cancellationToken);
+        if (_currentUser.IsAdmin)
+        {
+            return users
+                .Where(u => u.Role is UserRole.User or UserRole.ProjectManager)
+                .Select(AuthService.MapUser)
+                .ToList();
+        }
+
         return users
-            .Where(u => u.Role is UserRole.User or UserRole.ProjectManager)
+            .Where(u => u.Role == UserRole.User)
             .Select(AuthService.MapUser)
             .ToList();
     }

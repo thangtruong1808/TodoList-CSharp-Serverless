@@ -39,4 +39,18 @@ public class NotificationsController : ControllerBase
         await _notificationService.MarkAllReadAsync(cancellationToken);
         return NoContent();
     }
+
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> DeleteNotification(long id, CancellationToken cancellationToken)
+    {
+        var deleted = await _notificationService.DeleteAsync(id, cancellationToken);
+        return deleted ? NoContent() : NotFound();
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteAllNotifications(CancellationToken cancellationToken)
+    {
+        await _notificationService.DeleteAllAsync(cancellationToken);
+        return NoContent();
+    }
 }

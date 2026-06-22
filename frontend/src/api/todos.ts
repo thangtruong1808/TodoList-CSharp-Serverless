@@ -79,6 +79,16 @@ export async function updateTodo(
   })
 }
 
+export async function updateTodoStatus(
+  id: number,
+  status: TaskStatus,
+): Promise<void> {
+  return apiFetch<void>(`/todos/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+}
+
 export async function assignTodo(id: number, userId: number): Promise<void> {
   return apiFetch<void>(`/todos/${id}/assign`, {
     method: 'POST',

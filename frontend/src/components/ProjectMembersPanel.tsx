@@ -14,6 +14,7 @@ interface ProjectMembersPanelProps {
   projectId: number
   projectLabel: string
   assignableUsers: UserDto[]
+  onMembersChanged?: () => void
 }
 
 function formatAssignedAt(value: string) {
@@ -35,6 +36,7 @@ export default function ProjectMembersPanel({
   projectId,
   projectLabel,
   assignableUsers,
+  onMembersChanged,
 }: ProjectMembersPanelProps) {
   const [members, setMembers] = useState<ProjectMemberItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,6 +76,7 @@ export default function ProjectMembersPanel({
       const data = await getProjectMembers(projectId)
       setMembers(data)
       setSelectedUserId('')
+      onMembersChanged?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not assign user to project.')
     } finally {
@@ -87,6 +90,7 @@ export default function ProjectMembersPanel({
     try {
       await removeProjectMember(projectId, userId)
       setMembers((current) => current.filter((m) => m.userId !== userId))
+      onMembersChanged?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not remove user from project.')
     } finally {

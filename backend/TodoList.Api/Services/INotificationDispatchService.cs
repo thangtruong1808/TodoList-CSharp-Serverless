@@ -10,6 +10,12 @@ public interface INotificationDispatchService
         User assigner,
         CancellationToken cancellationToken = default);
 
+    Task<NotificationItem> NotifyUserProjectAssignedAsync(
+        long assigneeUserId,
+        ProjectListItemDto project,
+        User assigner,
+        CancellationToken cancellationToken = default);
+
     Task NotifyManagersTaskReadAsync(
         TaskItem task,
         User reader,

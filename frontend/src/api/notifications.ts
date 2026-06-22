@@ -100,3 +100,11 @@ export async function markNotificationRead(id: number) {
 export async function markAllNotificationsRead() {
   return apiFetch<void>('/notifications/read-all', { method: 'PATCH' })
 }
+
+export async function deleteNotification(id: number) {
+  return apiFetch<void>(`/notifications/${id}`, { method: 'DELETE' })
+}
+
+export async function deleteAllNotifications() {
+  return apiFetch<void>('/notifications', { method: 'DELETE' })
+}

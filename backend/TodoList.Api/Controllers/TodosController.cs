@@ -40,7 +40,7 @@ public class TodosController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,ProjectManager")]
     public async Task<ActionResult<TaskItem>> CreateTodo(CreateTaskRequest request, CancellationToken cancellationToken)
     {
         try
@@ -69,6 +69,10 @@ public class TodosController : ControllerBase
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Forbid(ex.Message);
         }
     }
 
@@ -99,7 +103,7 @@ public class TodosController : ControllerBase
     }
 
     [HttpDelete("{id:long}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,ProjectManager")]
     public async Task<IActionResult> DeleteTodo(long id, CancellationToken cancellationToken)
     {
         try

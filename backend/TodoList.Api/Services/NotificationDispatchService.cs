@@ -39,13 +39,45 @@ public class NotificationDispatchService : INotificationDispatchService
             Title = taskName,
             Message = $"Assigned by {assignerName} in {projectLabel}.",
             TaskId = task.Id,
+            ProjectId = task.ProjectId,
             IsRead = false,
             CreatedAt = now
         }, cancellationToken);
 
         await _hubContext.Clients.User(assigneeUserId.ToString()).SendAsync(
             "TaskAssigned",
-            BuildPayload(notification, task),
+            BuildTaskPayload(notification, task),
+            cancellationToken);
+
+        return notification;
+    }
+
+    public async Task<NotificationItem> NotifyUserProjectAssignedAsync(
+        long assigneeUserId,
+        ProjectListItemDto project,
+        User assigner,
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var assignerName = FormatFullName(assigner.FirstName, assigner.LastName);
+        var projectLabel = FormatProjectLabel(project.Code, project.Name);
+        var projectName = project.Name.Trim();
+
+        var notification = await _notificationRepository.CreateAsync(new NotificationItem
+        {
+            UserId = assigneeUserId,
+            Type = "ProjectAssigned",
+            Title = projectName,
+            Message = $"Added to {projectLabel} by {assignerName}.",
+            TaskId = null,
+            ProjectId = project.Id,
+            IsRead = false,
+            CreatedAt = now
+        }, cancellationToken);
+
+        await _hubContext.Clients.User(assigneeUserId.ToString()).SendAsync(
+            "ProjectAssigned",
+            BuildProjectPayload(notification, project),
             cancellationToken);
 
         return notification;
@@ -76,13 +108,14 @@ public class NotificationDispatchService : INotificationDispatchService
                 Title = taskName,
                 Message = $"{readerName} marked the task notification as read in {projectLabel}.",
                 TaskId = task.Id,
+                ProjectId = task.ProjectId,
                 IsRead = false,
                 CreatedAt = now
             }, cancellationToken);
 
             await _hubContext.Clients.User(manager.Id.ToString()).SendAsync(
                 "NotificationReceived",
-                BuildPayload(notification, task),
+                BuildTaskPayload(notification, task),
                 cancellationToken);
         }
     }
@@ -119,27 +152,42 @@ public class NotificationDispatchService : INotificationDispatchService
                 Title = taskName,
                 Message = $"{updaterName} changed status to {statusLabel} in {projectLabel}.",
                 TaskId = task.Id,
+                ProjectId = task.ProjectId,
                 IsRead = false,
                 CreatedAt = now
             }, cancellationToken);
 
             await _hubContext.Clients.User(manager.Id.ToString()).SendAsync(
                 "NotificationReceived",
-                BuildPayload(notification, task),
+                BuildTaskPayload(notification, task),
                 cancellationToken);
         }
     }
 
-    private static object BuildPayload(NotificationItem notification, TaskItem task) => new
+    private static object BuildTaskPayload(NotificationItem notification, TaskItem task) => new
     {
         notificationId = notification.Id,
         type = notification.Type,
         taskId = task.Id,
+        projectId = task.ProjectId,
         taskName = task.Name,
         title = notification.Title,
         message = notification.Message,
         projectName = notification.ProjectName ?? task.ProjectName,
         projectCode = notification.ProjectCode,
+        createdAt = notification.CreatedAt
+    };
+
+    private static object BuildProjectPayload(NotificationItem notification, ProjectListItemDto project) => new
+    {
+        notificationId = notification.Id,
+        type = notification.Type,
+        taskId = (long?)null,
+        projectId = project.Id,
+        title = notification.Title,
+        message = notification.Message,
+        projectName = notification.ProjectName ?? project.Name,
+        projectCode = notification.ProjectCode ?? project.Code,
         createdAt = notification.CreatedAt
     };
 

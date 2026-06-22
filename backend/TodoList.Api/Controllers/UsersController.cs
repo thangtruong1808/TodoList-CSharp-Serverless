@@ -46,7 +46,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet("assignable")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,ProjectManager")]
     public async Task<ActionResult<IEnumerable<UserDto>>> GetAssignableUsers(CancellationToken cancellationToken)
     {
         return Ok(await _userService.GetAssignableUsersAsync(cancellationToken));

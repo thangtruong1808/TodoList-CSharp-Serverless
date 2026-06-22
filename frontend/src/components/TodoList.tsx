@@ -7,6 +7,7 @@ import {
   getTodos,
   TASK_STATUSES,
   updateTodo,
+  updateTodoStatus,
   type TaskItem,
   type TaskStatus,
 } from '../api/todos'
@@ -20,6 +21,7 @@ import InlineMessage from './InlineMessage'
 import ProjectMembersPanel from './ProjectMembersPanel'
 import Spinner from './Spinner'
 import TablePagination from './TablePagination'
+import { MagnifyingGlassIcon, PlusIcon, XMarkIcon } from './icons/Icons'
 import {
   TASK_DESCRIPTION_MAX_LENGTH,
   TASK_NAME_MAX_LENGTH,
@@ -226,8 +228,12 @@ function compareTasks(a: TaskItem, b: TaskItem, sortState: SortState): number {
 export default function TodoList() {
   const user = useSelector((s: RootState) => s.auth.user)
   const tasksRefreshToken = useSelector((s: RootState) => s.notifications.tasksRefreshToken)
+  const projectsRefreshToken = useSelector((s: RootState) => s.notifications.projectsRefreshToken)
   const isAdmin = user?.role === 'Admin'
   const isProjectManager = user?.role === 'ProjectManager'
+  const canEditTaskDetails = isAdmin || isProjectManager
+  const canCreateTask = isAdmin || isProjectManager
+  const canDeleteTask = isAdmin || isProjectManager
   const canAssign = isProjectManager
 
   const [tasks, setTasks] = useState<TaskItem[]>([])
@@ -253,6 +259,7 @@ export default function TodoList() {
   const [formErrors, setFormErrors] = useState<TaskFormErrors>({})
   const [actionLoading, setActionLoading] = useState<ActionLoading>(null)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const [showAddForm, setShowAddForm] = useState(false)
   const [sortState, setSortState] = useState<SortState>({
     key: 'updatedAt',
     direction: 'desc',
@@ -269,6 +276,7 @@ export default function TodoList() {
   taskQueryRef.current = { searchQuery, statusFilter, projectFilter }
 
   const isEditing = editingId !== null
+  const isNameDescriptionReadOnly = isEditing && !canEditTaskDetails
   const isCreating = actionLoading?.type === 'create'
   const isSavingEdit =
     actionLoading?.type === 'edit' && editingId !== null
@@ -277,6 +285,9 @@ export default function TodoList() {
     actionLoading?.type === 'delete' &&
     deleteTarget !== null &&
     actionLoading.id === deleteTarget.id
+  const isSearchDebouncing = searchInput.trim() !== searchQuery
+  const isFilterLoading = loading && tasks.length > 0
+  const hasActiveFilters = Boolean(searchQuery || statusFilter || projectFilter)
 
   const sortedTasks = useMemo(() => {
     return [...tasks].sort((a, b) => compareTasks(a, b, sortState))
@@ -345,6 +356,34 @@ export default function TodoList() {
   }, [tasksRefreshToken])
 
   useEffect(() => {
+    if (projectsRefreshToken === 0) return
+
+    let cancelled = false
+
+    async function refreshProjectsFromNotification() {
+      setProjectsLoading(true)
+      try {
+        const data = await getProjects()
+        if (!cancelled) {
+          setProjects(data)
+        }
+      } catch {
+        // Keep existing project list if background refresh fails.
+      } finally {
+        if (!cancelled) {
+          setProjectsLoading(false)
+        }
+      }
+    }
+
+    void refreshProjectsFromNotification()
+
+    return () => {
+      cancelled = true
+    }
+  }, [projectsRefreshToken])
+
+  useEffect(() => {
     setProjectsLoading(true)
     getProjects()
       .then((data) => {
@@ -359,14 +398,16 @@ export default function TodoList() {
       .finally(() => setProjectsLoading(false))
   }, [])
 
+  const canManageProjectTeam = isAdmin || isProjectManager
+
   useEffect(() => {
-    if (!isAdmin) return
+    if (!canManageProjectTeam) return
     getAssignableUsers()
       .then(setAssignableUsers)
       .catch(() => {
         // assign UI optional if fetch fails
       })
-  }, [isAdmin])
+  }, [canManageProjectTeam])
 
   useEffect(() => {
     if (!isProjectManager) {
@@ -419,6 +460,15 @@ export default function TodoList() {
     }
   }
 
+  function refreshAssignableForProject(projectId: number) {
+    const id = Number(projectId)
+    if (!Number.isFinite(id) || id <= 0) {
+      return
+    }
+    assignableLoadStarted.current.delete(id)
+    void ensureAssignableLoaded(id)
+  }
+
   useEffect(() => {
     if (!successMessage) {
       return
@@ -433,11 +483,45 @@ export default function TodoList() {
 
   function resetTaskForm() {
     setEditingId(null)
+    setShowAddForm(false)
     setNewTaskName('')
     setNewTaskDescription('')
     setNewTaskStatus('')
     setNewTaskProjectId(projects[0]?.id ?? '')
     setFormErrors({})
+  }
+
+  function cancelAddForm() {
+    setShowAddForm(false)
+    setNewTaskName('')
+    setNewTaskDescription('')
+    setNewTaskStatus('')
+    setNewTaskProjectId(projects[0]?.id ?? '')
+    setFormErrors({})
+  }
+
+  function clearFilters() {
+    setSearchInput('')
+    setSearchQuery('')
+    setStatusFilter('')
+    setProjectFilter('')
+    setCurrentPage(1)
+  }
+
+  function toggleAddForm() {
+    if (showAddForm) {
+      cancelAddForm()
+      return
+    }
+
+    if (isEditing) {
+      resetTaskForm()
+    }
+
+    setShowAddForm(true)
+    window.requestAnimationFrame(() => {
+      taskFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
   }
 
   function clearFieldError(field: keyof TaskFormErrors) {
@@ -492,14 +576,21 @@ export default function TodoList() {
   async function handleSubmitTask(event: FormEvent) {
     event.preventDefault()
 
-    const errors = validateTaskForm({
-      name: newTaskName,
-      description: newTaskDescription,
-    })
+    if (isEditing && !canEditTaskDetails) {
+      if (!newTaskStatus) {
+        setError('Please select a status.')
+        return
+      }
+    } else {
+      const errors = validateTaskForm({
+        name: newTaskName,
+        description: newTaskDescription,
+      })
 
-    if (hasFormErrors(errors)) {
-      setFormErrors(errors)
-      return
+      if (hasFormErrors(errors)) {
+        setFormErrors(errors)
+        return
+      }
     }
 
     const name = newTaskName.trim()
@@ -512,28 +603,49 @@ export default function TodoList() {
       try {
         setActionLoading({ type: 'edit', id })
         setError(null)
-        await updateTodo(id, {
-          name,
-          description,
-          status: newTaskStatus as TaskStatus,
-        })
-        setTasks((current) =>
-          current.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  name,
-                  description,
-                  status: newTaskStatus as TaskStatus,
-                  updatedAt: new Date().toISOString(),
-                }
-              : item,
-          ),
-        )
-        resetTaskForm()
-        showSuccess(`Task "${name}" updated successfully.`)
+        if (canEditTaskDetails) {
+          await updateTodo(id, {
+            name,
+            description,
+            status: newTaskStatus as TaskStatus,
+          })
+          setTasks((current) =>
+            current.map((item) =>
+              item.id === id
+                ? {
+                    ...item,
+                    name,
+                    description,
+                    status: newTaskStatus as TaskStatus,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : item,
+            ),
+          )
+          resetTaskForm()
+          showSuccess(`Task "${name}" updated successfully.`)
+        } else {
+          await updateTodoStatus(id, newTaskStatus as TaskStatus)
+          setTasks((current) =>
+            current.map((item) =>
+              item.id === id
+                ? {
+                    ...item,
+                    status: newTaskStatus as TaskStatus,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : item,
+            ),
+          )
+          resetTaskForm()
+          showSuccess('Task status updated successfully.')
+        }
       } catch {
-        setError('Could not update task.')
+        setError(
+          canEditTaskDetails
+            ? 'Could not update task.'
+            : 'Could not update task status.',
+        )
         setSuccessMessage(null)
       } finally {
         setActionLoading(null)
@@ -568,6 +680,7 @@ export default function TodoList() {
   }
 
   function startEdit(task: TaskItem) {
+    setShowAddForm(false)
     setEditingId(task.id)
     setNewTaskName(task.name)
     setNewTaskDescription(task.description ?? '')
@@ -632,11 +745,11 @@ export default function TodoList() {
     }
   }
 
-  const emptyMessage = isAdmin
-    ? 'No tasks yet. Add one above.'
-    : isProjectManager
-      ? 'No tasks in your projects yet.'
-      : 'No tasks assigned to you yet.'
+  const emptyMessage = canCreateTask
+    ? hasActiveFilters
+      ? 'No tasks match your filters.'
+      : 'No tasks yet. Use Add Task to create one.'
+    : 'No tasks assigned to you yet.'
 
   function usersForTask(projectId: number) {
     return projectAssignableUsers[Number(projectId)] ?? []
@@ -699,7 +812,11 @@ export default function TodoList() {
           </p>
         )}
         {loaded && !loadingUsers && users.length === 0 && (
-          <p className="mt-1 text-xs text-slate-500">No users available in this project.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {canAssign
+              ? 'No users in this project. Filter by project above and add team members.'
+              : 'No users available in this project.'}
+          </p>
         )}
       </div>
     )
@@ -707,85 +824,156 @@ export default function TodoList() {
 
   return (
     <div className="mx-auto w-full max-w-7xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <h1 className="mb-6 text-2xl font-semibold text-slate-900">Task List</h1>
-
-      <div className="mb-6 flex flex-wrap items-end gap-3">
-        <div className="min-w-[12rem] flex-1">
-          <label htmlFor="task-search" className="mb-1 block text-sm font-medium text-slate-600">
-            Search
-          </label>
-          <input
-            id="task-search"
-            type="search"
-            value={searchInput}
-            onChange={(e) => {
-              setSearchInput(e.target.value)
-              setCurrentPage(1)
-            }}
-            placeholder="Search by task name..."
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-          />
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Task List</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Search, filter, and manage tasks across your projects.
+          </p>
         </div>
-        <div className="w-44">
-          <label htmlFor="status-filter" className="mb-1 block text-sm font-medium text-slate-600">
-            Status
-          </label>
-          <select
-            id="status-filter"
-            value={statusFilter}
-            onChange={(e) => {
-              const value = e.target.value
-              setStatusFilter(value === '' ? '' : (value as TaskStatus))
-              setCurrentPage(1)
-            }}
-            className={selectClass}
+        {canCreateTask && !isEditing && (
+          <button
+            type="button"
+            onClick={toggleAddForm}
+            disabled={isFormSubmitting}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+              showAddForm
+                ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+            aria-expanded={showAddForm}
           >
-            <option value="">All statuses</option>
-            {TASK_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {STATUS_LABELS[status]}
-              </option>
-            ))}
-          </select>
+            {showAddForm ? (
+              <>
+                <XMarkIcon size={16} />
+                Cancel
+              </>
+            ) : (
+              <>
+                <PlusIcon size={16} />
+                Add Task
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      <section
+        className="relative mb-6 rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+        aria-label="Task filters"
+      >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-700">Filters</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {(isSearchDebouncing || isFilterLoading) && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600">
+                <Spinner size="sm" label="Applying filters" />
+                {isSearchDebouncing ? 'Searching...' : 'Updating results...'}
+              </span>
+            )}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                disabled={loading}
+                className="text-xs font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline disabled:opacity-60"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
         </div>
-        <div className="w-52">
-          <label htmlFor="project-filter" className="mb-1 block text-sm font-medium text-slate-600">
-            Project
-          </label>
-          <div className="relative">
-            {projectsLoading && (
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2">
-                <Spinner size="sm" label="Loading projects" />
-              </span>
-            )}
-            {loading && !projectsLoading && (
-              <span className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2">
-                <Spinner size="sm" label="Loading tasks for project" />
-              </span>
-            )}
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
+          <div className="sm:col-span-2 lg:col-span-5">
+            <label htmlFor="task-search" className="mb-1 block text-sm font-medium text-slate-600">
+              Search by name
+            </label>
+            <div className="relative">
+              <MagnifyingGlassIcon
+                size={16}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                id="task-search"
+                type="search"
+                value={searchInput}
+                onChange={(e) => {
+                  setSearchInput(e.target.value)
+                  setCurrentPage(1)
+                }}
+                placeholder="Search tasks..."
+                className={`w-full rounded-lg border border-slate-300 py-2 pl-9 pr-10 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 ${isSearchDebouncing ? 'border-blue-200 bg-blue-50/30' : 'bg-white'}`}
+              />
+              {isSearchDebouncing && (
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                  <Spinner size="sm" label="Searching tasks" />
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="sm:col-span-1 lg:col-span-3">
+            <label htmlFor="status-filter" className="mb-1 block text-sm font-medium text-slate-600">
+              Status
+            </label>
             <select
-              id="project-filter"
-              value={projectFilter}
+              id="status-filter"
+              value={statusFilter}
               onChange={(e) => {
                 const value = e.target.value
-                setProjectFilter(value === '' ? '' : Number(value))
+                setStatusFilter(value === '' ? '' : (value as TaskStatus))
                 setCurrentPage(1)
               }}
-              disabled={projectsLoading}
-              className={`${selectClass} ${projectsLoading || loading ? 'pr-14' : ''}`}
+              disabled={loading && tasks.length === 0}
+              className={`${selectClass} ${isFilterLoading ? 'border-blue-200 bg-blue-50/30' : 'bg-white'}`}
             >
-              <option value="">All projects</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.code ? `${project.code} — ${project.name}` : project.name}
+              <option value="">All statuses</option>
+              {TASK_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {STATUS_LABELS[status]}
                 </option>
               ))}
             </select>
           </div>
-        </div>
-      </div>
 
-      {isAdmin && projectFilter !== '' && selectedProject && (
+          <div className="sm:col-span-1 lg:col-span-4">
+            <label htmlFor="project-filter" className="mb-1 block text-sm font-medium text-slate-600">
+              Project
+            </label>
+            <div className="relative">
+              {(projectsLoading || isFilterLoading) && (
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2">
+                  <Spinner
+                    size="sm"
+                    label={projectsLoading ? 'Loading projects' : 'Loading tasks'}
+                  />
+                </span>
+              )}
+              <select
+                id="project-filter"
+                value={projectFilter}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setProjectFilter(value === '' ? '' : Number(value))
+                  setCurrentPage(1)
+                }}
+                disabled={projectsLoading}
+                className={`${selectClass} ${projectsLoading || isFilterLoading ? 'border-blue-200 bg-blue-50/30 pr-10' : 'bg-white'}`}
+              >
+                <option value="">All projects</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.code ? `${project.code} — ${project.name}` : project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {canManageProjectTeam && projectFilter !== '' && selectedProject && (
         <div className="mb-4">
           <ProjectMembersPanel
             projectId={projectFilter}
@@ -795,50 +983,87 @@ export default function TodoList() {
                 : selectedProject.name
             }
             assignableUsers={assignableUsers}
+            onMembersChanged={() => refreshAssignableForProject(projectFilter)}
           />
         </div>
       )}
 
-      {(isAdmin || isEditing) && (
+      {(isEditing || (showAddForm && canCreateTask)) && (
       <form
         ref={taskFormRef}
         onSubmit={handleSubmitTask}
-        className={`mb-6 space-y-3 ${isEditing ? 'rounded-xl border border-blue-200 bg-blue-50/30 p-4 sm:p-5' : ''}`}
+        className={`mb-6 space-y-4 ${
+          isEditing
+            ? 'rounded-xl border border-blue-200 bg-blue-50/30 p-4 sm:p-5'
+            : 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5'
+        }`}
       >
-        {isEditing && (
+        {isEditing ? (
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-slate-900">
-              Editing Task #{editingId}
-            </p>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                Editing Task #{editingId}
+              </p>
+              {isNameDescriptionReadOnly && (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Task name and description are read-only. You can update status only.
+                </p>
+              )}
+            </div>
             <StatusBadge status={newTaskStatus as TaskStatus} />
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">New Task</p>
+              <p className="text-xs text-slate-500">
+                Create a task in one of your projects.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={cancelAddForm}
+              disabled={isFormSubmitting}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-70"
+            >
+              <XMarkIcon size={14} />
+              Close
+            </button>
           </div>
         )}
 
-        {isAdmin && !isEditing && (
+        {canCreateTask && !isEditing && (
           <div>
             <label htmlFor="task-project" className="mb-1 block text-sm font-medium text-slate-600">
               Project <span className="text-red-500">*</span>
             </label>
-            <select
-              id="task-project"
-              value={newTaskProjectId}
-              onChange={(e) => {
-                const value = e.target.value
-                setNewTaskProjectId(value === '' ? '' : Number(value))
-              }}
-              required
-              disabled={isFormSubmitting || projectsLoading}
-              className={selectClass}
-            >
-              <option value="" disabled>
-                Select project...
-              </option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.code ? `${project.code} — ${project.name}` : project.name}
+            <div className="relative">
+              {projectsLoading && (
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2">
+                  <Spinner size="sm" label="Loading projects" />
+                </span>
+              )}
+              <select
+                id="task-project"
+                value={newTaskProjectId}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setNewTaskProjectId(value === '' ? '' : Number(value))
+                }}
+                required
+                disabled={isFormSubmitting || projectsLoading}
+                className={`${selectClass} ${projectsLoading ? 'border-blue-200 bg-blue-50/40 pr-10' : ''}`}
+              >
+                <option value="" disabled>
+                  {projectsLoading ? 'Loading projects...' : 'Select project...'}
                 </option>
-              ))}
-            </select>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.code ? `${project.code} — ${project.name}` : project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
 
@@ -848,6 +1073,9 @@ export default function TodoList() {
             className="mb-1 block text-sm font-medium text-slate-600"
           >
             Task name <span className="text-red-500">*</span>
+            {isNameDescriptionReadOnly && (
+              <span className="ml-1 font-normal text-slate-400">(read-only)</span>
+            )}
           </label>
           <input
             id="task-name"
@@ -858,6 +1086,7 @@ export default function TodoList() {
               clearFieldError('name')
             }}
             onBlur={() => {
+              if (isNameDescriptionReadOnly) return
               const nameError = validateTaskName(newTaskName)
               setFormErrors((current) => {
                 const next = { ...current }
@@ -877,8 +1106,9 @@ export default function TodoList() {
                 .filter(Boolean)
                 .join(' ') || undefined
             }
-            className={`w-full rounded-lg border px-3 py-2 text-slate-900 outline-none focus:ring-2 ${fieldErrorClass(Boolean(formErrors.name))}`}
-            disabled={isFormSubmitting}
+            readOnly={isNameDescriptionReadOnly}
+            className={`w-full rounded-lg border px-3 py-2 text-slate-900 outline-none focus:ring-2 ${fieldErrorClass(Boolean(formErrors.name))} ${isNameDescriptionReadOnly ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600' : ''}`}
+            disabled={isFormSubmitting || isNameDescriptionReadOnly}
           />
           <FieldError id="task-name-error" message={formErrors.name} />
           <CharacterCount
@@ -894,6 +1124,9 @@ export default function TodoList() {
             className="mb-1 block text-sm font-medium text-slate-600"
           >
             Description <span className="text-slate-400">(optional)</span>
+            {isNameDescriptionReadOnly && (
+              <span className="ml-1 font-normal text-slate-400">(read-only)</span>
+            )}
           </label>
           <textarea
             id="task-description"
@@ -903,6 +1136,7 @@ export default function TodoList() {
               clearFieldError('description')
             }}
             onBlur={() => {
+              if (isNameDescriptionReadOnly) return
               const descriptionError = validateTaskDescription(newTaskDescription)
               setFormErrors((current) => {
                 const next = { ...current }
@@ -926,8 +1160,9 @@ export default function TodoList() {
                 .filter(Boolean)
                 .join(' ') || undefined
             }
-            className={`w-full rounded-lg border px-3 py-2 text-slate-900 outline-none focus:ring-2 ${fieldErrorClass(Boolean(formErrors.description))}`}
-            disabled={isFormSubmitting}
+            readOnly={isNameDescriptionReadOnly}
+            className={`w-full rounded-lg border px-3 py-2 text-slate-900 outline-none focus:ring-2 ${fieldErrorClass(Boolean(formErrors.description))} ${isNameDescriptionReadOnly ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-600' : ''}`}
+            disabled={isFormSubmitting || isNameDescriptionReadOnly}
           />
           <FieldError
             id="task-description-error"
@@ -986,7 +1221,7 @@ export default function TodoList() {
                 label={isEditing ? 'Saving task' : 'Creating task'}
               />
             )}
-            {isEditing ? 'Save Changes' : 'Add Task'}
+            {isEditing ? (canEditTaskDetails ? 'Save Changes' : 'Save Status') : 'Add Task'}
           </button>
           {isEditing && (
             <button
@@ -1018,22 +1253,22 @@ export default function TodoList() {
         />
       )}
 
-      {loading ? (
+      {loading && tasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 py-16">
           <Spinner size="lg" label="Loading tasks" />
           <p className="text-sm text-slate-500">Loading tasks...</p>
         </div>
       ) : (
         <div className="relative">
-          {refreshing && (
+          {(refreshing || isFilterLoading) && (
             <div
               className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center rounded-xl bg-white/60 pt-8 backdrop-blur-[1px] md:pt-10"
               aria-live="polite"
               aria-busy="true"
             >
               <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 shadow-sm">
-                <Spinner size="sm" label="Refreshing tasks" />
-                Updating tasks...
+                <Spinner size="sm" label={refreshing ? 'Refreshing tasks' : 'Loading filtered tasks'} />
+                {refreshing ? 'Updating tasks...' : 'Applying filters...'}
               </span>
             </div>
           )}
@@ -1051,6 +1286,9 @@ export default function TodoList() {
                   actionLoading.id === task.id
                 const isRowAssigning =
                   actionLoading?.type === 'assign' &&
+                  actionLoading.id === task.id
+                const isRowEditing =
+                  actionLoading?.type === 'edit' &&
                   actionLoading.id === task.id
                 const sequenceNumber = (currentPage - 1) * pageSize + index + 1
 
@@ -1095,16 +1333,21 @@ export default function TodoList() {
                       <button
                         type="button"
                         onClick={() => startEdit(task)}
-                        disabled={isRowDeleting}
+                        disabled={isRowDeleting || isRowEditing || isSavingEdit}
+                        aria-busy={isRowEditing}
                         className={editActionBtnClass}
                       >
+                        {isRowEditing && (
+                          <Spinner size="sm" label="Saving task" />
+                        )}
                         Edit
                       </button>
-                      {isAdmin && (
+                      {canDeleteTask && (
                       <button
                         type="button"
                         onClick={() => requestDelete(task.id, task.name)}
-                        disabled={isRowDeleting}
+                        disabled={isRowDeleting || isRowEditing || isSavingEdit}
+                        aria-busy={isRowDeleting}
                         className={deleteActionBtnClass}
                       >
                         {isRowDeleting && (
@@ -1210,6 +1453,9 @@ export default function TodoList() {
                     const isRowAssigning =
                       actionLoading?.type === 'assign' &&
                       actionLoading.id === task.id
+                    const isRowEditing =
+                      actionLoading?.type === 'edit' &&
+                      actionLoading.id === task.id
                     const sequenceNumber = (currentPage - 1) * pageSize + index + 1
 
                     return (
@@ -1267,18 +1513,23 @@ export default function TodoList() {
                             <button
                               type="button"
                               onClick={() => startEdit(task)}
-                              disabled={isRowDeleting}
+                              disabled={isRowDeleting || isRowEditing || isSavingEdit}
                               aria-label={`Edit task ${task.id}`}
+                              aria-busy={isRowEditing}
                               className={editActionBtnClass}
                             >
+                              {isRowEditing && (
+                                <Spinner size="sm" label="Saving task" />
+                              )}
                               Edit
                             </button>
-                            {isAdmin && (
+                            {canDeleteTask && (
                             <button
                               type="button"
                               onClick={() => requestDelete(task.id, task.name)}
-                              disabled={isRowDeleting}
+                              disabled={isRowDeleting || isRowEditing || isSavingEdit}
                               aria-label={`Delete task ${task.id}`}
+                              aria-busy={isRowDeleting}
                               className={deleteActionBtnClass}
                             >
                               {isRowDeleting && (
@@ -1312,7 +1563,7 @@ export default function TodoList() {
         </div>
       )}
 
-      {isAdmin && (
+      {canDeleteTask && (
       <DeleteDialog
         open={deleteTarget !== null}
         taskName={deleteTarget?.name ?? ''}

@@ -13,12 +13,12 @@ internal static class NotificationSqlQueries
     private const string FromJoin = """
         FROM Notifications n
         LEFT JOIN Tasks t ON t.Id = n.TaskId
-        LEFT JOIN Projects p ON p.Id = t.ProjectId
+        LEFT JOIN Projects p ON p.Id = COALESCE(t.ProjectId, n.ProjectId)
         """;
 
     public static readonly string Insert = $"""
-        INSERT INTO Notifications (UserId, Type, Title, Message, TaskId, IsRead, ReadAt, CreatedAt)
-        VALUES (@UserId, @Type, @Title, @Message, @TaskId, @IsRead, @ReadAt, @CreatedAt);
+        INSERT INTO Notifications (UserId, Type, Title, Message, TaskId, ProjectId, IsRead, ReadAt, CreatedAt)
+        VALUES (@UserId, @Type, @Title, @Message, @TaskId, @ProjectId, @IsRead, @ReadAt, @CreatedAt);
 
         SELECT {SelectColumns}
         {FromJoin}
@@ -47,6 +47,16 @@ internal static class NotificationSqlQueries
         UPDATE Notifications
         SET IsRead = 1, ReadAt = COALESCE(ReadAt, @ReadAt)
         WHERE UserId = @UserId AND IsRead = 0;
+        """;
+
+    public const string DeleteById = """
+        DELETE FROM Notifications
+        WHERE Id = @Id AND UserId = @UserId;
+        """;
+
+    public const string DeleteAllByUser = """
+        DELETE FROM Notifications
+        WHERE UserId = @UserId;
         """;
 
     public static readonly string SelectById = $"""

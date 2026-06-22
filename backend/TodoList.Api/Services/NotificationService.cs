@@ -74,4 +74,16 @@ public class NotificationService : INotificationService
         if (!_currentUser.UserId.HasValue) return false;
         return await _notificationRepository.MarkAllReadAsync(_currentUser.UserId.Value, cancellationToken);
     }
+
+    public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
+    {
+        if (!_currentUser.UserId.HasValue) return false;
+        return await _notificationRepository.DeleteAsync(id, _currentUser.UserId.Value, cancellationToken);
+    }
+
+    public async Task<bool> DeleteAllAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_currentUser.UserId.HasValue) return false;
+        return await _notificationRepository.DeleteAllAsync(_currentUser.UserId.Value, cancellationToken);
+    }
 }

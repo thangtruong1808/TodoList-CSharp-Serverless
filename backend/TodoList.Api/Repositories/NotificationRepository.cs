@@ -24,6 +24,7 @@ public class NotificationRepository : INotificationRepository
                 notification.Title,
                 notification.Message,
                 notification.TaskId,
+                notification.ProjectId,
                 IsRead = notification.IsRead,
                 ReadAt = notification.ReadAt,
                 notification.CreatedAt
@@ -73,6 +74,28 @@ public class NotificationRepository : INotificationRepository
             new CommandDefinition(
                 NotificationSqlQueries.MarkAllRead,
                 new { UserId = userId, ReadAt = DateTime.UtcNow },
+                cancellationToken: cancellationToken));
+        return rows > 0;
+    }
+
+    public async Task<bool> DeleteAsync(long id, long userId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        var rows = await connection.ExecuteAsync(
+            new CommandDefinition(
+                NotificationSqlQueries.DeleteById,
+                new { Id = id, UserId = userId },
+                cancellationToken: cancellationToken));
+        return rows > 0;
+    }
+
+    public async Task<bool> DeleteAllAsync(long userId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = _connectionFactory.CreateConnection();
+        var rows = await connection.ExecuteAsync(
+            new CommandDefinition(
+                NotificationSqlQueries.DeleteAllByUser,
+                new { UserId = userId },
                 cancellationToken: cancellationToken));
         return rows > 0;
     }
