@@ -6,6 +6,7 @@ export interface RegisterPayload {
   firstName: string
   lastName: string
   phone?: string | null
+  role?: 'User' | 'Admin'
 }
 
 export interface LoginPayload {

@@ -1,7 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { forgotPassword } from '../api/auth'
-import Spinner from '../components/Spinner'
+import { ArrowLeftIcon, EmailIcon, KeyIcon } from '../components/icons/Icons'
+import AlertMessage from '../components/ui/AlertMessage'
+import AuthCard from '../components/ui/AuthCard'
+import { FormField } from '../components/ui/FormField'
+import SubmitButton from '../components/ui/SubmitButton'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -13,6 +17,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setResult(null)
     try {
       const data = await forgotPassword(email)
       setResult(data)
@@ -24,33 +29,56 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <h1 className="mb-2 text-2xl font-semibold text-slate-900">Forgot password</h1>
-      <p className="mb-6 text-sm text-slate-600">Dev mode: reset token is shown in the response.</p>
+    <AuthCard
+      icon={<KeyIcon size={28} />}
+      title="Forgot password"
+      subtitle="Enter your email and we'll provide a reset token (dev mode)."
+      footer={
+        <Link
+          to="/login"
+          className="inline-flex items-center justify-center gap-1.5 font-medium text-blue-600 hover:text-blue-700 hover:underline"
+        >
+          <ArrowLeftIcon size={16} />
+          Back to sign in
+        </Link>
+      }
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200" disabled={loading} />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        <FormField
+          label="Email"
+          type="email"
+          icon={<EmailIcon size={18} />}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          required
+          disabled={loading}
+          autoComplete="email"
+        />
+        {error && <AlertMessage variant="error" message={error} />}
         {result && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <p>{result.message}</p>
+          <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-medium">{result.message}</p>
             {result.resetToken && (
-              <p className="mt-2 break-all font-mono text-xs">Token: {result.resetToken}</p>
+              <p className="break-all rounded-md bg-white/70 px-2 py-1.5 font-mono text-xs">
+                {result.resetToken}
+              </p>
             )}
             {result.resetUrl && (
-              <Link to={result.resetUrl} className="mt-2 inline-block text-blue-600 hover:underline">
+              <Link
+                to={result.resetUrl}
+                className="inline-flex items-center gap-1 font-medium text-blue-600 hover:underline"
+              >
+                <KeyIcon size={16} />
                 Open reset page
               </Link>
             )}
           </div>
         )}
-        <button type="submit" disabled={loading}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-70">
-          {loading && <Spinner size="sm" label="Sending" />}
+        <SubmitButton loading={loading} loadingLabel="Sending..." icon={<EmailIcon size={18} />}>
           Send reset link
-        </button>
+        </SubmitButton>
       </form>
-      <p className="mt-4 text-center text-sm"><Link to="/login" className="text-blue-600 hover:underline">Back to login</Link></p>
-    </div>
+    </AuthCard>
   )
 }

@@ -2,7 +2,11 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { login } from '../api/auth'
-import Spinner from '../components/Spinner'
+import { EmailIcon, LoginIcon, LockIcon } from '../components/icons/Icons'
+import AlertMessage from '../components/ui/AlertMessage'
+import AuthCard from '../components/ui/AuthCard'
+import { FormField } from '../components/ui/FormField'
+import SubmitButton from '../components/ui/SubmitButton'
 import { setCredentials, type AppDispatch } from '../store'
 
 export default function LoginPage() {
@@ -29,42 +33,50 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <h1 className="mb-6 text-2xl font-semibold text-slate-900">Sign in</h1>
+    <AuthCard
+      icon={<LoginIcon size={28} />}
+      title="Welcome back"
+      subtitle="Sign in to manage your tasks and notifications."
+      footer={
+        <span>
+          <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-700 hover:underline">
+            Forgot password?
+          </Link>
+          {' · '}
+          <Link to="/register" className="font-medium text-blue-600 hover:text-blue-700 hover:underline">
+            Create account
+          </Link>
+        </span>
+      }
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input
+        <FormField
+          label="Email"
           type="email"
+          icon={<EmailIcon size={18} />}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
+          placeholder="you@example.com"
           required
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
           disabled={loading}
+          autoComplete="email"
         />
-        <input
+        <FormField
+          label="Password"
           type="password"
+          icon={<LockIcon size={18} />}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
+          placeholder="Enter your password"
           required
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
           disabled={loading}
+          autoComplete="current-password"
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-70"
-        >
-          {loading && <Spinner size="sm" label="Signing in" />}
+        {error && <AlertMessage variant="error" message={error} />}
+        <SubmitButton loading={loading} loadingLabel="Signing in..." icon={<LoginIcon size={18} />}>
           Sign in
-        </button>
+        </SubmitButton>
       </form>
-      <p className="mt-4 text-center text-sm text-slate-600">
-        <Link to="/forgot-password" className="text-blue-600 hover:underline">Forgot password?</Link>
-        {' · '}
-        <Link to="/register" className="text-blue-600 hover:underline">Register</Link>
-      </p>
-    </div>
+    </AuthCard>
   )
 }

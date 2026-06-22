@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { getDashboardStats, type DashboardStats } from '../api/dashboard'
+import {
+  ChartIcon,
+  ClipboardIcon,
+  IdentificationIcon,
+  UsersIcon,
+} from '../components/icons/Icons'
 import InlineMessage from '../components/InlineMessage'
 import Spinner from '../components/Spinner'
+import PageHeader from '../components/ui/PageHeader'
 
 const STATUS_LABELS: Record<string, string> = {
   Pending: 'Pending',
@@ -56,29 +63,42 @@ export default function DashboardPage() {
   }
 
   const statusCards = [
-    { label: 'Pending', value: stats.pendingTasks, color: 'bg-slate-100 text-slate-800' },
-    { label: 'In Progress', value: stats.inProgressTasks, color: 'bg-blue-100 text-blue-800' },
-    { label: 'Completed', value: stats.completedTasks, color: 'bg-green-100 text-green-800' },
-    { label: 'Cancelled', value: stats.cancelledTasks, color: 'bg-red-100 text-red-800' },
+    { label: 'Pending', value: stats.pendingTasks, color: 'bg-slate-100 text-slate-800', icon: <ClipboardIcon size={18} /> },
+    { label: 'In Progress', value: stats.inProgressTasks, color: 'bg-blue-100 text-blue-800', icon: <ChartIcon size={18} /> },
+    { label: 'Completed', value: stats.completedTasks, color: 'bg-green-100 text-green-800', icon: <ChartIcon size={18} /> },
+    { label: 'Cancelled', value: stats.cancelledTasks, color: 'bg-red-100 text-red-800', icon: <ClipboardIcon size={18} /> },
   ]
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Admin Dashboard</h1>
+      <PageHeader
+        icon={<ChartIcon size={24} />}
+        title="Admin Dashboard"
+        subtitle="Overview of tasks, users, and recent assignments."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Total tasks</p>
-          <p className="mt-1 text-3xl font-semibold text-slate-900">{stats.totalTasks}</p>
+          <div className="mb-2 flex items-center gap-2 text-slate-500">
+            <ClipboardIcon size={18} />
+            <p className="text-sm">Total tasks</p>
+          </div>
+          <p className="text-3xl font-semibold text-slate-900">{stats.totalTasks}</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Total users</p>
-          <p className="mt-1 text-3xl font-semibold text-slate-900">{stats.totalUsers}</p>
+          <div className="mb-2 flex items-center gap-2 text-slate-500">
+            <UsersIcon size={18} />
+            <p className="text-sm">Total users</p>
+          </div>
+          <p className="text-3xl font-semibold text-slate-900">{stats.totalUsers}</p>
         </div>
         {statusCards.map((card) => (
           <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">{card.label}</p>
-            <p className={`mt-1 inline-flex rounded-full px-3 py-1 text-2xl font-semibold ${card.color}`}>
+            <div className="mb-2 flex items-center gap-2 text-slate-500">
+              {card.icon}
+              <p className="text-sm">{card.label}</p>
+            </div>
+            <p className={`inline-flex rounded-full px-3 py-1 text-2xl font-semibold ${card.color}`}>
               {card.value}
             </p>
           </div>
@@ -86,7 +106,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">Recent assignments</h2>
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
+          <IdentificationIcon size={20} className="text-blue-600" />
+          Recent assignments
+        </h2>
         {stats.recentAssignments.length === 0 ? (
           <p className="text-sm text-slate-500">No recent assignments.</p>
         ) : (

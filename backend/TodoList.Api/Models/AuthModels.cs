@@ -7,6 +7,7 @@ public class RegisterRequest
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    public UserRole Role { get; set; } = UserRole.User;
 }
 
 public class LoginRequest

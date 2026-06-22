@@ -1,6 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { resetPassword } from '../api/auth'
+import {
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  KeyIcon,
+  LockIcon,
+} from '../components/icons/Icons'
+import AlertMessage from '../components/ui/AlertMessage'
+import AuthCard from '../components/ui/AuthCard'
+import { FormField } from '../components/ui/FormField'
+import SubmitButton from '../components/ui/SubmitButton'
 import Spinner from '../components/Spinner'
 
 export default function ResetPasswordPage() {
@@ -8,12 +18,23 @@ export default function ResetPasswordPage() {
   const navigate = useNavigate()
   const [token, setToken] = useState(searchParams.get('token') ?? '')
   const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [fieldError, setFieldError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (newPassword.length < 8) {
+      setFieldError('Password must be at least 8 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setFieldError('Passwords do not match.')
+      return
+    }
+    setFieldError(null)
     setLoading(true)
     setError(null)
     try {
@@ -28,25 +49,78 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <h1 className="mb-6 text-2xl font-semibold text-slate-900">Reset password</h1>
+    <AuthCard
+      icon={<LockIcon size={28} />}
+      title="Reset password"
+      subtitle="Enter your reset token and choose a new password."
+      footer={
+        <Link
+          to="/login"
+          className="inline-flex items-center justify-center gap-1.5 font-medium text-blue-600 hover:text-blue-700 hover:underline"
+        >
+          <ArrowLeftIcon size={16} />
+          Back to sign in
+        </Link>
+      }
+    >
       {success ? (
-        <p className="text-sm text-green-700">Password updated. Redirecting to login...</p>
+        <div className="flex flex-col items-center gap-3 py-4 text-center">
+          <span className="text-green-600">
+            <CheckCircleIcon size={40} />
+          </span>
+          <p className="text-sm font-medium text-green-700">Password updated successfully.</p>
+          <p className="inline-flex items-center gap-2 text-sm text-slate-500">
+            <Spinner size="sm" label="Redirecting" />
+            Redirecting to sign in...
+          </p>
+        </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="text" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Reset token" required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200" disabled={loading} />
-          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" required minLength={8}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200" disabled={loading} />
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button type="submit" disabled={loading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-70">
-            {loading && <Spinner size="sm" label="Resetting" />}
+          <FormField
+            label="Reset token"
+            icon={<KeyIcon size={18} />}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="Paste your reset token"
+            required
+            disabled={loading}
+          />
+          <FormField
+            label="New password"
+            type="password"
+            icon={<LockIcon size={18} />}
+            value={newPassword}
+            onChange={(e) => {
+              setNewPassword(e.target.value)
+              setFieldError(null)
+            }}
+            placeholder="Min. 8 characters"
+            required
+            minLength={8}
+            disabled={loading}
+            autoComplete="new-password"
+          />
+          <FormField
+            label="Confirm password"
+            type="password"
+            icon={<LockIcon size={18} />}
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value)
+              setFieldError(null)
+            }}
+            placeholder="Re-enter new password"
+            required
+            disabled={loading}
+            error={fieldError}
+            autoComplete="new-password"
+          />
+          {error && <AlertMessage variant="error" message={error} />}
+          <SubmitButton loading={loading} loadingLabel="Resetting..." icon={<LockIcon size={18} />}>
             Reset password
-          </button>
+          </SubmitButton>
         </form>
       )}
-      <p className="mt-4 text-center text-sm"><Link to="/login" className="text-blue-600 hover:underline">Back to login</Link></p>
-    </div>
+    </AuthCard>
   )
 }

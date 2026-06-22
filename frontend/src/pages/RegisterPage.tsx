@@ -2,7 +2,19 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { register } from '../api/auth'
-import Spinner from '../components/Spinner'
+import type { UserRole } from '../api/client'
+import {
+  EmailIcon,
+  LockIcon,
+  PhoneIcon,
+  UserIcon,
+  UserPlusIcon,
+} from '../components/icons/Icons'
+import AlertMessage from '../components/ui/AlertMessage'
+import AuthCard from '../components/ui/AuthCard'
+import { FormField } from '../components/ui/FormField'
+import RoleSelector from '../components/ui/RoleSelector'
+import SubmitButton from '../components/ui/SubmitButton'
 import { setCredentials, type AppDispatch } from '../store'
 
 export default function RegisterPage() {
@@ -11,21 +23,45 @@ export default function RegisterPage() {
   const [form, setForm] = useState({
     email: '',
     password: '',
+    confirmPassword: '',
     firstName: '',
     lastName: '',
     phone: '',
+    role: 'User' as UserRole,
   })
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  function validateForm() {
+    const errors: Record<string, string> = {}
+    if (!form.firstName.trim()) errors.firstName = 'First name is required.'
+    if (!form.lastName.trim()) errors.lastName = 'Last name is required.'
+    if (!form.email.trim()) errors.email = 'Email is required.'
+    if (form.password.length < 8) errors.password = 'Password must be at least 8 characters.'
+    if (!form.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password.'
+    } else if (form.password !== form.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match.'
+    }
+    setFieldErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!validateForm()) return
+
     setLoading(true)
     setError(null)
     try {
       const data = await register({
-        ...form,
+        email: form.email,
+        password: form.password,
+        firstName: form.firstName,
+        lastName: form.lastName,
         phone: form.phone || null,
+        role: form.role,
       })
       dispatch(setCredentials(data))
       navigate('/')
@@ -36,33 +72,130 @@ export default function RegisterPage() {
     }
   }
 
-  const inputClass =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-
   return (
-    <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <h1 className="mb-6 text-2xl font-semibold text-slate-900">Create account</h1>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <input type="text" placeholder="First name" required value={form.firstName}
-          onChange={(e) => setForm({ ...form, firstName: e.target.value })} className={inputClass} disabled={loading} />
-        <input type="text" placeholder="Last name" required value={form.lastName}
-          onChange={(e) => setForm({ ...form, lastName: e.target.value })} className={inputClass} disabled={loading} />
-        <input type="email" placeholder="Email" required value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} disabled={loading} />
-        <input type="password" placeholder="Password (min 8 chars)" required minLength={8} value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputClass} disabled={loading} />
-        <input type="tel" placeholder="Phone (optional)" value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputClass} disabled={loading} />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" disabled={loading}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-70">
-          {loading && <Spinner size="sm" label="Registering" />}
-          Register
-        </button>
+    <AuthCard
+      wide
+      icon={<UserPlusIcon size={28} />}
+      title="Create account"
+      subtitle="Join TodoList — choose a role to explore the full portfolio demo."
+      footer={
+        <span>
+          Already have an account?{' '}
+          <Link to="/login" className="font-medium text-blue-600 hover:text-blue-700 hover:underline">
+            Sign in
+          </Link>
+        </span>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField
+            label="First name"
+            icon={<UserIcon size={18} />}
+            value={form.firstName}
+            onChange={(e) => {
+              setForm({ ...form, firstName: e.target.value })
+              setFieldErrors((c) => ({ ...c, firstName: '' }))
+            }}
+            placeholder="John"
+            required
+            disabled={loading}
+            error={fieldErrors.firstName}
+            autoComplete="given-name"
+          />
+          <FormField
+            label="Last name"
+            icon={<UserIcon size={18} />}
+            value={form.lastName}
+            onChange={(e) => {
+              setForm({ ...form, lastName: e.target.value })
+              setFieldErrors((c) => ({ ...c, lastName: '' }))
+            }}
+            placeholder="Doe"
+            required
+            disabled={loading}
+            error={fieldErrors.lastName}
+            autoComplete="family-name"
+          />
+        </div>
+
+        <FormField
+          label="Email"
+          type="email"
+          icon={<EmailIcon size={18} />}
+          value={form.email}
+          onChange={(e) => {
+            setForm({ ...form, email: e.target.value })
+            setFieldErrors((c) => ({ ...c, email: '' }))
+          }}
+          placeholder="you@example.com"
+          required
+          disabled={loading}
+          error={fieldErrors.email}
+          autoComplete="email"
+        />
+
+        <FormField
+          label="Phone"
+          type="tel"
+          icon={<PhoneIcon size={18} />}
+          value={form.phone}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          placeholder="Optional"
+          disabled={loading}
+          autoComplete="tel"
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField
+            label="Password"
+            type="password"
+            icon={<LockIcon size={18} />}
+            value={form.password}
+            onChange={(e) => {
+              setForm({ ...form, password: e.target.value })
+              setFieldErrors((c) => ({ ...c, password: '' }))
+            }}
+            placeholder="Min. 8 characters"
+            required
+            minLength={8}
+            disabled={loading}
+            error={fieldErrors.password}
+            autoComplete="new-password"
+          />
+          <FormField
+            label="Confirm password"
+            type="password"
+            icon={<LockIcon size={18} />}
+            value={form.confirmPassword}
+            onChange={(e) => {
+              setForm({ ...form, confirmPassword: e.target.value })
+              setFieldErrors((c) => ({ ...c, confirmPassword: '' }))
+            }}
+            placeholder="Re-enter password"
+            required
+            disabled={loading}
+            error={fieldErrors.confirmPassword}
+            autoComplete="new-password"
+          />
+        </div>
+
+        <RoleSelector
+          value={form.role}
+          onChange={(role) => setForm({ ...form, role })}
+          disabled={loading}
+        />
+
+        {error && <AlertMessage variant="error" message={error} />}
+
+        <SubmitButton
+          loading={loading}
+          loadingLabel="Creating account..."
+          icon={<UserPlusIcon size={18} />}
+        >
+          Create account
+        </SubmitButton>
       </form>
-      <p className="mt-4 text-center text-sm text-slate-600">
-        <Link to="/login" className="text-blue-600 hover:underline">Already have an account?</Link>
-      </p>
-    </div>
+    </AuthCard>
   )
 }

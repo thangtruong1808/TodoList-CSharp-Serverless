@@ -1,8 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useDispatch } from 'react-redux'
 import { changePassword, getProfile, updateProfile } from '../api/users'
+import {
+  EmailIcon,
+  LockIcon,
+  PhoneIcon,
+  ProfileIcon,
+  UserIcon,
+} from '../components/icons/Icons'
 import InlineMessage from '../components/InlineMessage'
 import Spinner from '../components/Spinner'
+import { FormField } from '../components/ui/FormField'
+import PageHeader from '../components/ui/PageHeader'
+import SubmitButton from '../components/ui/SubmitButton'
 import { updateUser, type AppDispatch } from '../store'
 
 export default function ProfilePage() {
@@ -13,6 +23,8 @@ export default function ProfilePage() {
   const [email, setEmail] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [pwdError, setPwdError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [pwdSaving, setPwdSaving] = useState(false)
@@ -51,6 +63,15 @@ export default function ProfilePage() {
 
   async function handlePasswordSubmit(e: FormEvent) {
     e.preventDefault()
+    if (newPassword.length < 8) {
+      setPwdError('New password must be at least 8 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPwdError('Passwords do not match.')
+      return
+    }
+    setPwdError(null)
     setPwdSaving(true)
     setError(null)
     setSuccess(null)
@@ -58,6 +79,7 @@ export default function ProfilePage() {
       await changePassword(currentPassword, newPassword)
       setCurrentPassword('')
       setNewPassword('')
+      setConfirmPassword('')
       setSuccess('Password changed successfully.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Password change failed')
@@ -75,37 +97,122 @@ export default function ProfilePage() {
     )
   }
 
-  const inputClass =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Profile</h1>
+      <PageHeader
+        icon={<ProfileIcon size={24} />}
+        title="Profile"
+        subtitle="Manage your personal information and account security."
+      />
+
       {success && <InlineMessage variant="success" message={success} onDismiss={() => setSuccess(null)} />}
       {error && <InlineMessage variant="error" message={error} onDismiss={() => setError(null)} />}
 
-      <form onSubmit={handleProfileSubmit} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="font-medium text-slate-900">Personal information</h2>
-        <input type="email" value={email} disabled className={`${inputClass} bg-slate-50 text-slate-500`} />
-        <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className={inputClass} disabled={saving} />
-        <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className={inputClass} disabled={saving} />
-        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className={inputClass} disabled={saving} />
-        <button type="submit" disabled={saving}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-70">
-          {saving && <Spinner size="sm" label="Saving profile" />}
-          Save profile
-        </button>
+      <form
+        onSubmit={handleProfileSubmit}
+        className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      >
+        <h2 className="flex items-center gap-2 font-medium text-slate-900">
+          <UserIcon size={18} className="text-blue-600" />
+          Personal information
+        </h2>
+        <FormField
+          label="Email"
+          type="email"
+          icon={<EmailIcon size={18} />}
+          value={email}
+          disabled
+          className="bg-slate-50 text-slate-500"
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField
+            label="First name"
+            icon={<UserIcon size={18} />}
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            required
+            disabled={saving}
+          />
+          <FormField
+            label="Last name"
+            icon={<UserIcon size={18} />}
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            required
+            disabled={saving}
+          />
+        </div>
+        <FormField
+          label="Phone"
+          type="tel"
+          icon={<PhoneIcon size={18} />}
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Optional"
+          disabled={saving}
+        />
+        <div className="pt-1">
+          <SubmitButton loading={saving} loadingLabel="Saving profile..." icon={<UserIcon size={18} />}>
+            Save profile
+          </SubmitButton>
+        </div>
       </form>
 
-      <form onSubmit={handlePasswordSubmit} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="font-medium text-slate-900">Change password</h2>
-        <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" required className={inputClass} disabled={pwdSaving} />
-        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" required minLength={8} className={inputClass} disabled={pwdSaving} />
-        <button type="submit" disabled={pwdSaving}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-70">
-          {pwdSaving && <Spinner size="sm" label="Changing password" />}
+      <form
+        onSubmit={handlePasswordSubmit}
+        className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      >
+        <h2 className="flex items-center gap-2 font-medium text-slate-900">
+          <LockIcon size={18} className="text-blue-600" />
           Change password
-        </button>
+        </h2>
+        <FormField
+          label="Current password"
+          type="password"
+          icon={<LockIcon size={18} />}
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          required
+          disabled={pwdSaving}
+          autoComplete="current-password"
+        />
+        <FormField
+          label="New password"
+          type="password"
+          icon={<LockIcon size={18} />}
+          value={newPassword}
+          onChange={(e) => {
+            setNewPassword(e.target.value)
+            setPwdError(null)
+          }}
+          required
+          minLength={8}
+          disabled={pwdSaving}
+          autoComplete="new-password"
+        />
+        <FormField
+          label="Confirm new password"
+          type="password"
+          icon={<LockIcon size={18} />}
+          value={confirmPassword}
+          onChange={(e) => {
+            setConfirmPassword(e.target.value)
+            setPwdError(null)
+          }}
+          required
+          disabled={pwdSaving}
+          error={pwdError}
+          autoComplete="new-password"
+        />
+        <div className="pt-1">
+          <SubmitButton
+            loading={pwdSaving}
+            loadingLabel="Changing password..."
+            icon={<LockIcon size={18} />}
+          >
+            Change password
+          </SubmitButton>
+        </div>
       </form>
     </div>
   )
